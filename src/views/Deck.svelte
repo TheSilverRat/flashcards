@@ -2,7 +2,7 @@
   import { liveQuery } from 'dexie';
   import { db, deleteDeck, getSettings, renameDeck } from '../lib/db';
   import { countDue, dayStart, formatInterval, State } from '../lib/srs';
-  import { plainPreview } from '../lib/render';
+  import { previewHtml } from '../lib/render';
   import { back, go } from '../lib/router.svelte';
   import { confirm, prompt, toast } from '../lib/ui.svelte';
   import Icon from '../components/Icon.svelte';
@@ -132,8 +132,8 @@
               <li>
                 <button class="list-item" onclick={() => go(`/deck/${deckId}/edit/${card.id}`)}>
                   <span class="content">
-                    <span class="headline">{plainPreview(card.front)}</span>
-                    <span class="supporting">{plainPreview(card.back, 70)}</span>
+                    <span class="headline preview">{@html previewHtml(card.front)}</span>
+                    <span class="supporting preview">{@html previewHtml(card.back, true)}</span>
                   </span>
                   <span class="trail"><span class="badge {st.cls}">{st.text}</span></span>
                 </button>
@@ -193,6 +193,9 @@
   }
   .search input { flex: 1; background: none; border: none; outline: none; font-size: 16px; color: var(--md-on-surface); }
   .search input::placeholder { color: var(--md-on-surface-variant); }
+  /* Rendered math in the one-line previews */
+  .preview :global(.katex) { font-size: 1.08em; }
+  .headline.preview { line-height: 28px; }
   .none { color: var(--md-on-surface-variant); text-align: center; padding: 24px; }
 
   /* Desktop: study panel on the left (stays in view), card list on the right. */

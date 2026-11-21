@@ -76,14 +76,50 @@ export async function renderCard(text: string): Promise<string> {
   return html;
 }
 
-/** Plain-text preview for lists: strips Markdown, shows math source compactly. */
-export function plainPreview(text: string, max = 90): string {
-  const s = text
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '[image]')
-    .replace(/\$\$([\s\S]+?)\$\$/g, '$1')
-    .replace(/(?<!\\)\$([^$\n]+?)\$/g, '$1')
-    .replace(/\*\*|`|^#+\s*|^>\s*/gm, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return s.length > max ? s.slice(0, max - 1) + '…' : s || '(empty)';
+const previewCache = new Map<string, string>();
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+/** Flatten a formula onto one line; `small` also turns display-size fractions into text-size ones. */
+function compactTex(tex: string, small: boolean): string {
+  if (small) tex = tex.replace(/\\displaystyle\s*/g, '').replace(/\\dfrac/g, '\\frac');
+  return tex
+    .replace(/\\begin\{(aligned|align\*?|gathered|split)\}([\s\S]*?)\\end\{\1\}/g, (_m, _env, body: string) =>
+      body.replace(/\\\\/g, '\\;').replace(/&/g, ''),
+    )
+    .replace(/\\qquad|\\quad/g, '\\;');
+}
+
+/**
+ * One-line HTML preview for lists: math rendered (compact, inline), Markdown markers stripped,
+ * everything else escaped. The list row truncates it with an ellipsis.
+ */
+export function previewHtml(text: string, small = false): string {
+  const key = (small ? 's' : 'l') + text;
+  const hit = previewCache.get(key);
+  if (hit !== undefined) return hit;
+  const parts: string[] = [];
+  let last = 0;
+  const plain = (s: string) =>
+    escapeHtml(
+      s
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, ' [image] ')
+        .replace(/\\\$/g, '$')
+        .replace(/\*\*|__|`|^#+\s*|^>\s*|^[-*]\s+/gm, ''),
+    );
+  for (const m of text.matchAll(MATH_RE)) {
+    parts.push(plain(text.slice(last, m.index)));
+    const tex = m[1] ?? m[2] ?? m[3] ?? m[4];
+    // Display math sits on its own line in the card; keep it apart from neighbouring text here.
+    const display = m[1] !== undefined || m[2] !== undefined;
+    const html = renderMath(compactTex(tex, small), false);
+    parts.push(display ? ` ${html} ` : html);
+    last = m.index! + m[0].length;
+  }
+  parts.push(plain(text.slice(last)));
+  let html = parts.join('').replace(/\s+/g, ' ').trim();
+  if (!html) html = '(empty)';
+  if (previewCache.size > 2000) previewCache.clear();
+  previewCache.set(key, html);
+  return html;
 }
