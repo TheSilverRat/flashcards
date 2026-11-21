@@ -6,9 +6,22 @@
   import { back, go } from '../lib/router.svelte';
   import { confirm, prompt, toast } from '../lib/ui.svelte';
   import Icon from '../components/Icon.svelte';
+  import { device } from '../lib/device.svelte';
 
   let { deckId }: { deckId: string } = $props();
   let query = $state('');
+  let searchEl: HTMLInputElement | undefined = $state();
+
+  // "/" jumps to the search box (desktop habit); Escape clears it.
+  function onKey(e: KeyboardEvent) {
+    if (e.key === '/' && searchEl && document.activeElement !== searchEl && !(e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement)) {
+      e.preventDefault();
+      searchEl.focus();
+    } else if (e.key === 'Escape' && document.activeElement === searchEl) {
+      query = '';
+      searchEl?.blur();
+    }
+  }
 
   const data = liveQuery(async () => {
     const [deck, cards, settings] = await Promise.all([
@@ -58,6 +71,8 @@
   }
 </script>
 
+<svelte:window onkeydown={onKey} />
+
 <main class="page">
   <header class="topbar">
     <button class="icon-btn on-surface" onclick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
@@ -71,58 +86,65 @@
     <div class="empty"><h2>Deck not found</h2></div>
   {:else if $data}
     {@const c = $data.counts}
-    {#if $data.deck?.source === 'bundled'}
-      <p class="source"><Icon name="file" size={18} /> From <code>decks/{$data.deck.file}</code> on your PC</p>
-    {/if}
+    <div class="cols">
+      <aside class="side">
+        {#if $data.deck?.source === 'bundled'}
+          <p class="source"><Icon name="file" size={18} /> From <code>decks/{$data.deck.file}</code> on your PC</p>
+        {/if}
 
-    <section class="panel study">
-      <div class="counts">
-        <div><span class="n new">{c.newCount}</span><span class="l">New</span></div>
-        <div><span class="n learn">{c.learnCount}</span><span class="l">Learning</span></div>
-        <div><span class="n">{c.reviewCount}</span><span class="l">Review</span></div>
-      </div>
-      {#if c.total > 0}
-        <button class="btn primary lg block" onclick={() => go(`/deck/${deckId}/study`)}>
-          <Icon name="play" /> Study now
-        </button>
-      {:else}
-        <p class="caught-up">
-          {$data.cards.length ? 'All caught up for today. Nice work.' : 'Add some cards to start studying.'}
-        </p>
-      {/if}
-      {#if $data.cards.length}
-        <button class="btn block lg tonal" onclick={() => go(`/deck/${deckId}/practice`)}>
-          <Icon name="shuffle" /> Practice all
-        </button>
-      {/if}
-    </section>
-
-    <div class="section-label">Cards · {$data.cards.length}</div>
-    {#if $data.cards.length > 5}
-      <label class="search">
-        <Icon name="search" />
-        <input placeholder="Search cards" bind:value={query} />
-      </label>
-    {/if}
-
-    {#if filtered.length}
-      <ul class="list">
-        {#each filtered as card (card.id)}
-          {@const st = status(card)}
-          <li>
-            <button class="list-item" onclick={() => go(`/deck/${deckId}/edit/${card.id}`)}>
-              <span class="content">
-                <span class="headline">{plainPreview(card.front)}</span>
-                <span class="supporting">{plainPreview(card.back, 70)}</span>
-              </span>
-              <span class="trail"><span class="badge {st.cls}">{st.text}</span></span>
+        <section class="panel study">
+          <div class="counts">
+            <div><span class="n new">{c.newCount}</span><span class="l">New</span></div>
+            <div><span class="n learn">{c.learnCount}</span><span class="l">Learning</span></div>
+            <div><span class="n">{c.reviewCount}</span><span class="l">Review</span></div>
+          </div>
+          {#if c.total > 0}
+            <button class="btn primary lg block" onclick={() => go(`/deck/${deckId}/study`)}>
+              <Icon name="play" /> Study now
             </button>
-          </li>
-        {/each}
-      </ul>
-    {:else if $data.cards.length}
-      <p class="none">No cards match “{query}”.</p>
-    {/if}
+          {:else}
+            <p class="caught-up">
+              {$data.cards.length ? 'All caught up for today. Nice work.' : 'Add some cards to start studying.'}
+            </p>
+          {/if}
+          {#if $data.cards.length}
+            <button class="btn block lg tonal" onclick={() => go(`/deck/${deckId}/practice`)}>
+              <Icon name="shuffle" /> Practice all
+            </button>
+          {/if}
+        </section>
+      </aside>
+
+      <div class="cards">
+        <div class="section-label">Cards · {$data.cards.length}</div>
+        {#if $data.cards.length > 5}
+          <label class="search">
+            <Icon name="search" />
+            <input placeholder="Search cards" bind:value={query} bind:this={searchEl} />
+            {#if device.desktop}<span class="kbd">/</span>{/if}
+          </label>
+        {/if}
+
+        {#if filtered.length}
+          <ul class="list">
+            {#each filtered as card (card.id)}
+              {@const st = status(card)}
+              <li>
+                <button class="list-item" onclick={() => go(`/deck/${deckId}/edit/${card.id}`)}>
+                  <span class="content">
+                    <span class="headline">{plainPreview(card.front)}</span>
+                    <span class="supporting">{plainPreview(card.back, 70)}</span>
+                  </span>
+                  <span class="trail"><span class="badge {st.cls}">{st.text}</span></span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {:else if $data.cards.length}
+          <p class="none">No cards match “{query}”.</p>
+        {/if}
+      </div>
+    </div>
   {/if}
 
   <button class="fab extended" onclick={() => go(`/deck/${deckId}/edit/new`)}><Icon name="plus" /> Add card</button>
@@ -172,4 +194,15 @@
   .search input { flex: 1; background: none; border: none; outline: none; font-size: 16px; color: var(--md-on-surface); }
   .search input::placeholder { color: var(--md-on-surface-variant); }
   .none { color: var(--md-on-surface-variant); text-align: center; padding: 24px; }
+
+  /* Desktop: study panel on the left (stays in view), card list on the right. */
+  :global(html.desktop) .cols {
+    display: grid;
+    grid-template-columns: 340px minmax(0, 1fr);
+    gap: 32px;
+    align-items: start;
+    margin-top: 8px;
+  }
+  :global(html.desktop) .side { position: sticky; top: 88px; }
+  :global(html.desktop) .cards .section-label { margin-top: 0; }
 </style>

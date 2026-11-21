@@ -5,6 +5,7 @@
   import { lastBackup } from '../lib/backup';
   import { go } from '../lib/router.svelte';
   import { prompt } from '../lib/ui.svelte';
+  import { device } from '../lib/device.svelte';
   import Icon from '../components/Icon.svelte';
 
   const DAY = 86_400_000;
@@ -55,7 +56,9 @@
 <main class="page">
   <header class="topbar">
     <h1>Flashcards</h1>
-    <button class="icon-btn" onclick={() => go('/settings')} aria-label="Settings"><Icon name="settings" /></button>
+    {#if !device.desktop}
+      <button class="icon-btn" onclick={() => go('/settings')} aria-label="Settings"><Icon name="settings" /></button>
+    {/if}
   </header>
 
   {#if $summary}
@@ -87,7 +90,7 @@
 
     {#if s.rows.length}
       <div class="section-label">Decks</div>
-      <ul class="list">
+      <ul class="list decks">
         {#each s.rows as { deck, total, counts } (deck.id)}
           <li>
             <button class="list-item" onclick={() => go(`/deck/${deck.id}`)}>
@@ -158,4 +161,22 @@
   .backup small { font-size: 14px; opacity: 0.85; }
 
   .done { color: var(--ok); display: grid; }
+
+  /* Desktop: decks become a grid of tiles. */
+  :global(html.desktop) .hero { padding: 16px 4px 8px; }
+  :global(html.desktop) .due { font-size: 44px; line-height: 52px; margin: 8px 0 20px; }
+  :global(html.desktop) .backup { width: auto; max-width: 520px; }
+  :global(html.desktop) .decks {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
+    border-radius: 0;
+    overflow: visible;
+  }
+  :global(html.desktop) .decks .list-item {
+    min-height: 96px;
+    padding: 16px 20px;
+    border-radius: var(--md-shape-xl);
+  }
+  :global(html.desktop) .decks .avatar { width: 48px; height: 48px; font-size: 20px; }
 </style>

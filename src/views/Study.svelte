@@ -17,6 +17,7 @@
   import { buzz, toast } from '../lib/ui.svelte';
   import Icon from '../components/Icon.svelte';
   import CardContent from '../components/CardContent.svelte';
+  import { device } from '../lib/device.svelte';
 
   let { deckId, mode }: { deckId: string; mode: 'review' | 'practice' } = $props();
   const practice = $derived(mode === 'practice');
@@ -268,6 +269,12 @@
 
   function onKey(e: KeyboardEvent) {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      prev();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowUp') {
       e.preventDefault();
       flip();
@@ -277,6 +284,9 @@
     else if (revealed && !practice) {
       const g = GRADES.find((x) => x.key === e.key);
       if (g) grade(g.grade);
+    } else if (revealed && practice) {
+      if (e.key === '1') practiceAgain();
+      else if (e.key === '2') next();
     }
   }
 
@@ -374,7 +384,18 @@
     </div>
 
     <section class="controls">
-      {#if !revealed}
+      {#if !revealed && device.desktop}
+        <!-- Desktop: buttons for what swipes do on the phone, with their keys -->
+        <div class="desk-row">
+          <button class="btn text lg" onclick={prev} title="Left arrow">
+            <Icon name="back" /> {practice ? 'Previous' : 'Back'}
+          </button>
+          <button class="btn primary lg reveal" onclick={flip}>Show answer <span class="kbd">Space</span></button>
+          <button class="btn text lg next" onclick={next} title="Right arrow">
+            {practice ? 'Next' : 'Skip'} <Icon name="forward" />
+          </button>
+        </div>
+      {:else if !revealed}
         <p class="gestures">
           <span>← {practice ? 'next' : 'skip'}</span>
           <span>↑ reveal</span>
@@ -383,8 +404,14 @@
         <button class="btn primary lg block" onclick={flip}>Show answer</button>
       {:else if practice}
         <div class="group">
-          <button class="grade g1" onclick={practiceAgain}><span class="gl">See again later</span></button>
-          <button class="grade g3" onclick={next}><span class="gl">Got it</span></button>
+          <button class="grade g1" onclick={practiceAgain}>
+            <span class="gl">See again later</span>
+            {#if device.desktop}<span class="kbd">1</span>{/if}
+          </button>
+          <button class="grade g3" onclick={next}>
+            <span class="gl">Got it</span>
+            {#if device.desktop}<span class="kbd">2</span>{/if}
+          </button>
         </div>
       {:else}
         <div class="group">
@@ -392,9 +419,17 @@
             <button class="grade g{g.grade}" onclick={() => grade(g.grade)}>
               <span class="gl">{g.label}</span>
               <span class="gi">{intervals[g.grade] ?? ''}</span>
+              {#if device.desktop}<span class="kbd">{g.key}</span>{/if}
             </button>
           {/each}
         </div>
+      {/if}
+      {#if device.desktop}
+        <p class="desk-keys">
+          Click the card or press <span class="kbd">Space</span> to flip · <span class="kbd">←</span>
+          <span class="kbd">→</span> back / skip · <span class="kbd">Ctrl</span> <span class="kbd">Z</span> undo ·
+          <span class="kbd">Esc</span> close
+        </p>
       {/if}
     </section>
   {/if}
@@ -571,6 +606,29 @@
   .g2 { background: var(--md-surface-container-highest); color: var(--md-on-surface); }
   .g3 { background: var(--md-primary); color: var(--md-on-primary); }
   .g4 { background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); }
+
+  /* ---------- Desktop ---------- */
+  .desk-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+  .desk-row .btn.text { justify-self: start; color: var(--md-on-surface-variant); }
+  .desk-row .btn.next { justify-self: end; padding: 0 16px 0 20px; }
+  .reveal { min-width: 280px; }
+  .grade .kbd { margin-top: 4px; height: 20px; font-size: 11px; }
+  .desk-keys {
+    margin: 4px 0 0;
+    text-align: center;
+    color: var(--md-outline);
+    font-size: 13px;
+    line-height: 28px;
+  }
+  .desk-keys .kbd { opacity: 0.8; }
+
+  :global(html.desktop) .study { max-width: 880px; }
+  :global(html.desktop) .stage { height: min(56dvh, 520px); }
+  :global(html.desktop) .face { padding: 24px 28px; }
+  :global(html.desktop) .face :global(.card-content) { font-size: 26px; }
+  :global(html.desktop) .q :global(.card-content) { font-size: 17px; }
+  :global(html.desktop) .controls { flex: none; justify-content: flex-start; padding-top: 36px; }
+  :global(html.desktop) .grade { min-height: 84px; }
 
   /* ---------- Done ---------- */
   .done {

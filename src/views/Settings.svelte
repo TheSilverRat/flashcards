@@ -5,6 +5,7 @@
   import { back } from '../lib/router.svelte';
   import { choose, toast, ui } from '../lib/ui.svelte';
   import Icon from '../components/Icon.svelte';
+  import { device, setLayout, type LayoutPref } from '../lib/device.svelte';
 
   let s = $state({ ...defaultSettings });
   let last = $state<number | null>(null);
@@ -144,6 +145,26 @@
     </label>
   </div>
 
+  <div class="section-label">Display</div>
+  <div class="list">
+    <label class="list-item">
+      <span class="content">
+        <span class="headline">Layout</span>
+        <span class="supporting">
+          {device.pref === 'auto' ? `Automatic: using ${device.desktop ? 'desktop' : 'phone'} layout` : 'Saved for this browser only'}
+        </span>
+      </span>
+      <select
+        class="input sel wide"
+        value={device.pref}
+        onchange={(e) => setLayout((e.currentTarget as HTMLSelectElement).value as LayoutPref)}>
+        <option value="auto">Automatic</option>
+        <option value="phone">Phone</option>
+        <option value="desktop">Desktop</option>
+      </select>
+    </label>
+  </div>
+
   <div class="section-label">Storage</div>
   <div class="list">
     <div class="list-item static">
@@ -186,6 +207,9 @@
     text-align: center;
     border-radius: var(--md-shape-xs) var(--md-shape-xs) 0 0;
   }
+  .sel.wide { width: 128px; }
+
+  :global(html.desktop) .page { max-width: 760px; }
 
   /* M3 switch */
   .switch { position: relative; flex-shrink: 0; width: 52px; height: 32px; }

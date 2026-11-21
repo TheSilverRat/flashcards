@@ -5,6 +5,7 @@
   import { getSettings, requestPersistence } from './lib/db';
   import { syncBundledDecks } from './lib/bundled';
   import { installRipple, updateScrolled } from './lib/ripple';
+  import { device } from './lib/device.svelte';
 
   installRipple();
   import Dialogs from './components/Dialogs.svelte';
@@ -13,6 +14,7 @@
   import Editor from './views/Editor.svelte';
   import Study from './views/Study.svelte';
   import Settings from './views/Settings.svelte';
+  import NavRail from './components/NavRail.svelte';
 
   let ready = $state(false);
 
@@ -35,6 +37,8 @@
   });
 
   const r = $derived(router.route);
+  // Desktop: browse screens get the navigation rail; study and the editor stay full-screen.
+  const rail = $derived(device.desktop && (r.name === 'home' || r.name === 'deck' || r.name === 'settings'));
 
   // New screen: start at the top, reset the app bar color.
   $effect(() => {
@@ -44,6 +48,9 @@
   });
 </script>
 
+{#if rail}<NavRail />{/if}
+
+<div class="shell" class:rail>
 {#if ready}
   {#key router.path}
     {#if r.name === 'home'}
@@ -59,5 +66,10 @@
     {/if}
   {/key}
 {/if}
+</div>
 
 <Dialogs />
+
+<style>
+  .shell.rail { padding-left: 88px; }
+</style>

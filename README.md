@@ -72,4 +72,12 @@ Open the Pages URL in Chrome → ⋮ → **Add to Home screen** → **Install**.
 - Swipe **up** or tap: flip the card
 - Swipe **left**: skip (review) / next (practice)
 - Swipe **right**: bring back the previous card (undoes its rating)
-- Keyboard: Space = flip, ← / → = previous / next, 1–4 = Again / Hard / Good / Easy
+- Keyboard: Space = flip, ← / → = previous / next, 1–4 = Again / Hard / Good / Easy, Ctrl+Z = undo, Esc = close
+
+## Desktop layout
+
+On a PC browser (window at least 840px wide, mouse or trackpad) the app switches to a desktop layout:
+navigation rail on the left, decks as a grid, the deck page in two columns, the editor with a live
+preview beside the fields (Ctrl+S save, Ctrl+Enter save & add another), and study with on-screen
+Back / Skip buttons and key hints. Narrow the window and it falls back to the phone layout.
+Settings → Display → Layout can force Phone or Desktop for that browser.
