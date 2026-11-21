@@ -129,11 +129,17 @@
 
   // Restarts the lift animation on every flip (it alternates between two identical keyframes).
   let flips = $state(0);
+  // While the card turns, the "next card" underneath would show through, so it's hidden.
+  let flipping = $state(false);
+  let flipTimer: ReturnType<typeof setTimeout> | undefined;
 
   function flip() {
     if (!current || busy) return;
     revealed = !revealed;
     flips++;
+    flipping = true;
+    clearTimeout(flipTimer);
+    flipTimer = setTimeout(() => (flipping = false), 650);
     buzz(5);
   }
 
@@ -354,7 +360,7 @@
     </section>
   {:else if current}
     <div class="stage">
-      {#if remaining > 1}<div class="stack" aria-hidden="true"></div>{/if}
+      {#if remaining > 1}<div class="stack" class:hidden={flipping} aria-hidden="true"></div>{/if}
       <div
         class="card-wrap"
         class:scrollable
@@ -502,6 +508,8 @@
     background: var(--md-surface-container);
     transform: translateY(14px) scale(0.92);
   }
+  /* Switched instantly: the card fully covers the stack at the start and end of a flip. */
+  .stack.hidden { visibility: hidden; }
   .card-wrap {
     position: absolute;
     inset: 0;
