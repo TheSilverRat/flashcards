@@ -102,6 +102,7 @@
     animate = false;
     flipAnimate = false;
     revealed = false;
+    flips = 0;
     dx = 0;
     dy = 0;
     scale = 0.92;
@@ -126,9 +127,13 @@
     toast(msg, 1500);
   }
 
+  // Restarts the lift animation on every flip (it alternates between two identical keyframes).
+  let flips = $state(0);
+
   function flip() {
     if (!current || busy) return;
     revealed = !revealed;
+    flips++;
     buzz(5);
   }
 
@@ -363,17 +368,20 @@
         role="button"
         tabindex="0"
         aria-label={revealed ? 'Answer. Tap to show question' : 'Question. Tap to show answer'}>
-        <div class="flipper" class:revealed style:transition={flipAnimate ? '' : 'none'}>
-          <div class="face front" class:scroll={overflow.front} bind:this={frontEl}>
-            <span class="face-label">Question</span>
-            <div class="face-body"><CardContent text={current.front} onrender={measure} /></div>
-          </div>
-          <div class="face back" class:scroll={overflow.back} bind:this={backEl}>
-            <span class="face-label">Answer</span>
-            <div class="face-body">
-              <div class="q"><CardContent text={current.front} onrender={measure} /></div>
-              <div class="divider"></div>
-              <CardContent text={current.back} onrender={measure} />
+        <!-- .lift gives the flip its 3D depth (perspective) and a slight rise toward you mid-turn -->
+        <div class="lift" class:lift-a={flips % 2 === 1} class:lift-b={flips > 0 && flips % 2 === 0}>
+          <div class="flipper" class:revealed class:instant={!flipAnimate}>
+            <div class="face front" class:scroll={overflow.front} bind:this={frontEl}>
+              <span class="face-label">Question</span>
+              <div class="face-body"><CardContent text={current.front} onrender={measure} /></div>
+            </div>
+            <div class="face back" class:scroll={overflow.back} bind:this={backEl}>
+              <span class="face-label">Answer</span>
+              <div class="face-body">
+                <div class="q"><CardContent text={current.front} onrender={measure} /></div>
+                <div class="divider"></div>
+                <CardContent text={current.back} onrender={measure} />
+              </div>
             </div>
           </div>
         </div>
@@ -484,8 +492,8 @@
   .stage {
     position: relative;
     height: min(50dvh, 560px);
-    perspective: 1600px;
     flex-shrink: 0;
+    z-index: 2; /* the near edge of a turning card may overlap the controls below */
   }
   .stack {
     position: absolute;
@@ -506,14 +514,37 @@
   }
   .card-wrap.scrollable { touch-action: pan-y; }
   .card-wrap:active { cursor: grabbing; }
+  /*
+   * The flip: the card turns over its horizontal axis (bottom edge swings up toward you, matching
+   * the swipe-up gesture). Perspective must sit on the flipper's direct parent, otherwise the
+   * rotation is flattened into a plain vertical squash.
+   */
+  .lift {
+    position: absolute;
+    inset: 0;
+    perspective: 1800px;
+  }
+  .lift-a { animation: lift-a 0.6s var(--md-standard); }
+  .lift-b { animation: lift-b 0.6s var(--md-standard); }
+  @keyframes lift-a { 50% { transform: scale(1.035); } }
+  @keyframes lift-b { 50% { transform: scale(1.035); } }
   .flipper {
     position: relative;
     width: 100%;
     height: 100%;
     transform-style: preserve-3d;
-    transition: transform 0.55s var(--md-emphasized);
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .flipper.revealed { transform: rotateX(180deg); }
+  .flipper.instant, .flipper.instant .face { transition: none; }
+  /* A face dims slightly while it's turned away from the light. */
+  .face { transition: filter 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+  .flipper.revealed .front, .flipper:not(.revealed) .back { filter: brightness(0.55); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flipper, .face { transition-duration: 0.01s; }
+    .lift-a, .lift-b { animation: none; }
+  }
   .face {
     position: absolute;
     inset: 0;
