@@ -145,8 +145,9 @@ export async function syncBundledDecks(decks: ParsedDeck[] = bundledDecks()) {
       if (!existing) {
         // createdAt = file order, so bundled decks list first, alphabetically.
         await db.decks.add({ id: deckId, name: d.name, createdAt: i, updatedAt: now, source: 'bundled', file: d.file });
-      } else if (existing.name !== d.name || existing.source !== 'bundled') {
-        await db.decks.update(deckId, { name: d.name, source: 'bundled', file: d.file, updatedAt: now });
+      } else if (existing.name !== d.name || existing.source !== 'bundled' || existing.createdAt !== i) {
+        // createdAt doubles as the sort position, so refresh it when files are added or renamed.
+        await db.decks.update(deckId, { name: d.name, source: 'bundled', file: d.file, createdAt: i, updatedAt: now });
       }
 
       const current = await db.cards.where('deckId').equals(deckId).toArray();
