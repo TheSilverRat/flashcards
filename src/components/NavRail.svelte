@@ -2,6 +2,7 @@
   // M3 navigation rail, shown on the left in the desktop layout.
   import { go, router } from '../lib/router.svelte';
   import Icon, { type IconName } from './Icon.svelte';
+  import AppIcon from './AppIcon.svelte';
 
   const dest: { label: string; icon: IconName; path: string; match: string[] }[] = [
     { label: 'Decks', icon: 'cards', path: '/', match: ['home', 'deck'] },
@@ -10,7 +11,7 @@
 </script>
 
 <nav class="rail" aria-label="Main">
-  <img class="logo" src="./favicon.svg" alt="" width="40" height="40" />
+  <span class="logo"><AppIcon size={40} /></span>
   {#each dest as d (d.path)}
     {@const active = d.match.includes(router.route.name)}
     <button
@@ -39,7 +40,7 @@
     padding-top: 16px;
     background: var(--md-surface);
   }
-  .logo { margin-bottom: 28px; border-radius: 12px; }
+  .logo { display: grid; margin-bottom: 28px; }
   .dest {
     display: flex;
     flex-direction: column;
