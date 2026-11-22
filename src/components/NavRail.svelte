@@ -5,7 +5,7 @@
   import AppIcon from './AppIcon.svelte';
 
   const dest: { label: string; icon: IconName; path: string; match: string[] }[] = [
-    { label: 'Decks', icon: 'cards', path: '/', match: ['home', 'deck'] },
+    { label: 'Decks', icon: 'cards', path: '/', match: ['home', 'deck', 'deckSettings'] },
     { label: 'Settings', icon: 'settings', path: '/settings', match: ['settings'] },
   ];
 </script>

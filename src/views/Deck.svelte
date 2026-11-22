@@ -1,7 +1,7 @@
 <script lang="ts">
   import { liveQuery } from 'dexie';
-  import { db, deleteDeck, getSettings, renameDeck } from '../lib/db';
-  import { countDue, dayStart, formatInterval, State } from '../lib/srs';
+  import { db, deckOptions, deleteDeck, renameDeck, type Card } from '../lib/db';
+  import { countDue, dayUsage, formatInterval, State } from '../lib/srs';
   import { previewHtml } from '../lib/render';
   import { back, go } from '../lib/router.svelte';
   import { confirm, prompt, toast } from '../lib/ui.svelte';
@@ -24,18 +24,21 @@
   }
 
   const data = liveQuery(async () => {
-    const [deck, cards, settings] = await Promise.all([
+    const [deck, cards, used] = await Promise.all([
       db.decks.get(deckId),
       db.cards.where('deckId').equals(deckId).toArray(),
-      getSettings(),
+      dayUsage(deckId),
     ]);
-    const newToday = await db.reviews
-      .where('reviewedAt')
-      .aboveOrEqual(dayStart())
-      .filter((r) => r.deckId === deckId && r.prevState === State.New)
-      .count();
-    cards.sort((a, b) => b.createdAt - a.createdAt);
-    return { deck, cards, counts: countDue(cards, newToday, settings.newPerDay) };
+    const opts = deckOptions(deck);
+    // Same order as the deck file (or the order you added them on the phone).
+    cards.sort((a, b) => a.createdAt - b.createdAt);
+    return {
+      deck,
+      cards,
+      opts,
+      counts: countDue(cards, used, opts),
+      missedCount: cards.filter((c) => c.missed).length,
+    };
   });
 
   const filtered = $derived.by(() => {
@@ -44,7 +47,8 @@
     return q ? cards.filter((c) => (c.front + '\n' + c.back).toLowerCase().includes(q)) : cards;
   });
 
-  function status(c: { srs: { state: number }; due: number }) {
+  function status(c: Card): { text: string; cls: string } | null {
+    if ($data?.opts.mode !== 'spaced') return c.missed ? { text: 'Missed', cls: 'miss' } : null;
     if (c.srs.state === State.New) return { text: 'New', cls: 'blue' };
     const ms = c.due - Date.now();
     if (ms <= 0) return { text: 'Due', cls: 'accent' };
@@ -77,6 +81,11 @@
   <header class="topbar">
     <button class="icon-btn on-surface" onclick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
     <h1><button class="title" onclick={rename} title="Rename">{$data?.deck?.name ?? ''}</button></h1>
+    {#if $data?.deck}
+      <button class="icon-btn" onclick={() => go(`/deck/${deckId}/settings`)} aria-label="Study options" title="Study options">
+        <Icon name="tune" />
+      </button>
+    {/if}
     {#if $data?.deck && $data.deck.source !== 'bundled'}
       <button class="icon-btn" onclick={remove} aria-label="Delete deck"><Icon name="trash" /></button>
     {/if}
@@ -93,6 +102,31 @@
         {/if}
 
         <section class="panel study">
+          <button class="mode" onclick={() => go(`/deck/${deckId}/settings`)}>
+            {$data.opts.mode === 'spaced' ? 'Spaced repetition' : 'Basic'}
+            <Icon name="tune" size={16} />
+          </button>
+          {#if $data.opts.mode === 'basic'}
+            {@const o = $data.opts}
+            {@const n = $data.cards.length}
+            <div class="counts two">
+              <div><span class="n">{n}</span><span class="l">Cards</span></div>
+              <div><span class="n" class:miss={$data.missedCount}>{$data.missedCount}</span><span class="l">Missed last time</span></div>
+            </div>
+            {#if n}
+              <button class="btn primary lg block" onclick={() => go(`/deck/${deckId}/practice`)}>
+                <Icon name="play" />
+                {o.sessionSize && o.sessionSize < n ? `Study ${o.sessionSize} cards` : 'Study all cards'}
+              </button>
+              {#if $data.missedCount}
+                <button class="btn block lg tonal" onclick={() => go(`/deck/${deckId}/practice/missed`)}>
+                  <Icon name="refresh" /> Go over the {$data.missedCount} missed
+                </button>
+              {/if}
+            {:else}
+              <p class="caught-up">Add some cards to start studying.</p>
+            {/if}
+          {:else}
           <div class="counts">
             <div><span class="n new">{c.newCount}</span><span class="l">New</span></div>
             <div><span class="n learn">{c.learnCount}</span><span class="l">Learning</span></div>
@@ -111,6 +145,7 @@
             <button class="btn block lg tonal" onclick={() => go(`/deck/${deckId}/practice`)}>
               <Icon name="shuffle" /> Practice all
             </button>
+          {/if}
           {/if}
         </section>
       </aside>
@@ -135,7 +170,7 @@
                     <span class="headline preview">{@html previewHtml(card.front)}</span>
                     <span class="supporting preview">{@html previewHtml(card.back, true)}</span>
                   </span>
-                  <span class="trail"><span class="badge {st.cls}">{st.text}</span></span>
+                  {#if st}<span class="trail"><span class="badge {st.cls}">{st.text}</span></span>{/if}
                 </button>
               </li>
             {/each}
@@ -178,6 +213,23 @@
   .n.new { color: var(--md-tertiary); }
   .n.learn { color: var(--md-primary); }
   .l { color: var(--md-on-surface-variant); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; }
+  .mode {
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    margin: -4px 0 12px;
+    padding: 0 10px 0 12px;
+    border-radius: var(--md-shape-sm);
+    background: var(--md-secondary-container);
+    color: var(--md-on-secondary-container);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+  .counts.two { grid-template-columns: repeat(2, 1fr); }
+  .n.miss { color: var(--md-error); }
   .caught-up { text-align: center; color: var(--md-on-surface-variant); margin: 4px 0 8px; }
 
   .search {

@@ -10,6 +10,56 @@ export interface Deck {
   source?: 'bundled';
   /** File name in `decks/`, for bundled decks. */
   file?: string;
+  // Study options (Deck → settings). Missing values mean the defaults in deckOptions().
+  /** 'basic' = study all cards whenever you like; 'spaced' = FSRS spaced repetition. */
+  mode?: StudyMode;
+  /** Basic: card order in a session. */
+  order?: 'shuffled' | 'ordered';
+  /** Basic: cards per session, 0 = all. */
+  sessionSize?: number;
+  /** Spaced: new cards introduced per day. */
+  newPerDay?: number;
+  /** Spaced: reviews per day, 0 = no limit. */
+  reviewsPerDay?: number;
+}
+
+export type StudyMode = 'basic' | 'spaced';
+
+export interface DeckOptions {
+  mode: StudyMode;
+  order: 'shuffled' | 'ordered';
+  sessionSize: number;
+  newPerDay: number;
+  reviewsPerDay: number;
+}
+
+export function deckOptions(d: Deck | undefined): DeckOptions {
+  return {
+    mode: d?.mode ?? 'basic',
+    order: d?.order ?? 'shuffled',
+    sessionSize: d?.sessionSize ?? 0,
+    newPerDay: d?.newPerDay ?? 20,
+    reviewsPerDay: d?.reviewsPerDay ?? 0,
+  };
+}
+
+export async function setDeckOptions(id: string, opts: Partial<DeckOptions>) {
+  await db.decks.update(id, { ...opts, updatedAt: Date.now() });
+}
+
+/** Clear a deck's study history: spaced-repetition schedule, missed marks and review log. */
+export async function resetDeckProgress(id: string) {
+  const now = new Date();
+  await db.transaction('rw', db.cards, db.reviews, async () => {
+    const cards = await db.cards.where('deckId').equals(id).toArray();
+    await db.cards.bulkPut(
+      cards.map((c) => {
+        const srs = createEmptyCard(now);
+        return { ...c, srs, due: srs.due.getTime(), missed: undefined };
+      }),
+    );
+    await db.reviews.where('deckId').equals(id).delete();
+  });
 }
 
 /** Cards from `decks/*.md` files have ids starting with `b:`; the file is their source of truth. */
@@ -26,6 +76,8 @@ export interface Card {
   due: number;
   createdAt: number;
   updatedAt: number;
+  /** Basic mode: you marked this card "Missed it" the last time you studied it. */
+  missed?: boolean;
 }
 
 export interface StoredImage {
@@ -39,7 +91,7 @@ export interface Review {
   cardId: string;
   deckId: string;
   rating: number;
-  /** Card state before this review (0 = New). */
+  /** Card state before this review (0 = New). -1 = a basic-mode answer (not scheduled). */
   prevState: number;
   reviewedAt: number;
   durationMs: number;
@@ -79,6 +131,7 @@ export function uid(): string {
 // ---------- Settings ----------
 
 export interface Settings {
+  /** Old global setting; decks now have their own (deckOptions). Kept so stored settings still parse. */
   newPerDay: number;
   /** Target probability of remembering a card when it comes up (FSRS). */
   retention: number;

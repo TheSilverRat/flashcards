@@ -425,6 +425,7 @@ body.scrolled .topbar { background: var(--md-surface-container); }
 .badge.accent { background: var(--md-primary-container); color: var(--md-on-primary-container); }
 .badge.blue { background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); }
 .badge.muted { background: var(--md-surface-container-highest); color: var(--md-on-surface-variant); }
+.badge.miss { background: var(--md-error-container); color: var(--md-on-error-container); }
 
 .empty {
   text-align: center;

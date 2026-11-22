@@ -14,6 +14,7 @@
   import Editor from './views/Editor.svelte';
   import Study from './views/Study.svelte';
   import Settings from './views/Settings.svelte';
+  import DeckSettings from './views/DeckSettings.svelte';
   import NavRail from './components/NavRail.svelte';
 
   let ready = $state(false);
@@ -38,7 +39,7 @@
 
   const r = $derived(router.route);
   // Desktop: browse screens get the navigation rail; study and the editor stay full-screen.
-  const rail = $derived(device.desktop && (r.name === 'home' || r.name === 'deck' || r.name === 'settings'));
+  const rail = $derived(device.desktop && (r.name === 'home' || r.name === 'deck' || r.name === 'deckSettings' || r.name === 'settings'));
 
   // New screen: start at the top, reset the app bar color.
   $effect(() => {
@@ -60,7 +61,9 @@
     {:else if r.name === 'edit'}
       <Editor deckId={r.deckId} cardId={r.cardId} />
     {:else if r.name === 'study'}
-      <Study deckId={r.deckId} mode={r.mode} />
+      <Study deckId={r.deckId} mode={r.mode} missed={r.missed} />
+    {:else if r.name === 'deckSettings'}
+      <DeckSettings deckId={r.deckId} />
     {:else if r.name === 'settings'}
       <Settings />
     {/if}

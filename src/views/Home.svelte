@@ -1,7 +1,7 @@
 <script lang="ts">
   import { liveQuery } from 'dexie';
-  import { db, createDeck, getSettings, type Deck } from '../lib/db';
-  import { countDue, dayStart, streak, State, type Counts } from '../lib/srs';
+  import { db, createDeck, deckOptions, type Deck, type DeckOptions } from '../lib/db';
+  import { countDue, dayStart, streak, usageFrom, type Counts } from '../lib/srs';
   import { lastBackup } from '../lib/backup';
   import { go } from '../lib/router.svelte';
   import { prompt } from '../lib/ui.svelte';
@@ -11,26 +11,36 @@
   const DAY = 86_400_000;
 
   const summary = liveQuery(async () => {
-    const [decks, cards, settings, last] = await Promise.all([
+    const [decks, cards, last] = await Promise.all([
       db.decks.orderBy('createdAt').toArray(),
       db.cards.toArray(),
-      getSettings(),
       lastBackup(),
     ]);
     const today = dayStart();
     const todays = await db.reviews.where('reviewedAt').aboveOrEqual(today).toArray();
     const times = (await db.reviews.orderBy('reviewedAt').keys()) as number[];
 
-    const rows: { deck: Deck; total: number; counts: Counts }[] = decks.map((deck) => {
+    const rows: { deck: Deck; opts: DeckOptions; total: number; counts: Counts; missed: number }[] = decks.map((deck) => {
       const deckCards = cards.filter((c) => c.deckId === deck.id);
-      const newToday = todays.filter((r) => r.deckId === deck.id && r.prevState === State.New).length;
-      return { deck, total: deckCards.length, counts: countDue(deckCards, newToday, settings.newPerDay) };
+      const opts = deckOptions(deck);
+      const used = usageFrom(todays.filter((r) => r.deckId === deck.id));
+      return {
+        deck,
+        opts,
+        total: deckCards.length,
+        counts: countDue(deckCards, used, opts),
+        missed: deckCards.filter((c) => c.missed).length,
+      };
     });
+    const spaced = rows.filter((r) => r.opts.mode === 'spaced');
+    const basic = rows.filter((r) => r.opts.mode === 'basic');
 
     const needsBackup = cards.length >= 10 && (last === null || Date.now() - last > 14 * DAY);
     return {
       rows,
-      dueTotal: rows.reduce((s, r) => s + r.counts.total, 0),
+      dueTotal: spaced.reduce((s, r) => s + r.counts.total, 0),
+      missedTotal: basic.reduce((s, r) => s + r.missed, 0),
+      cardTotal: cards.length,
       reviewedToday: todays.length,
       streak: streak(times),
       needsBackup,
@@ -67,8 +77,12 @@
       <p class="greet">{greeting()}</p>
       {#if s.dueTotal > 0}
         <p class="due"><span class="num">{s.dueTotal}</span> card{s.dueTotal === 1 ? '' : 's'} to review today</p>
+      {:else if s.missedTotal > 0}
+        <p class="due"><span class="num">{s.missedTotal}</span> missed card{s.missedTotal === 1 ? '' : 's'} to go over</p>
+      {:else if s.cardTotal > 0}
+        <p class="due"><span class="num">{s.cardTotal}</span> card{s.cardTotal === 1 ? '' : 's'} ready to study</p>
       {:else if s.rows.length}
-        <p class="due">You're all caught up</p>
+        <p class="due">Add some cards to begin</p>
       {:else}
         <p class="due">Create your first deck to begin</p>
       {/if}
@@ -91,7 +105,7 @@
     {#if s.rows.length}
       <div class="section-label">Decks</div>
       <ul class="list decks">
-        {#each s.rows as { deck, total, counts } (deck.id)}
+        {#each s.rows as { deck, opts, total, counts, missed } (deck.id)}
           <li>
             <button class="list-item" onclick={() => go(`/deck/${deck.id}`)}>
               <span class="lead"><span class="avatar">{initial(deck.name)}</span></span>
@@ -102,11 +116,15 @@
                 </span>
               </span>
               <span class="trail">
+                {#if opts.mode === 'basic'}
+                  {#if missed}<span class="badge miss" title="Missed last time">{missed}</span>{/if}
+                {:else}
                 {#if counts.newCount}<span class="badge blue" title="New">{counts.newCount}</span>{/if}
                 {#if counts.learnCount + counts.reviewCount}
                   <span class="badge accent" title="Due">{counts.learnCount + counts.reviewCount}</span>
                 {/if}
                 {#if !counts.total}<span class="done"><Icon name="check" size={20} /></span>{/if}
+                {/if}
               </span>
             </button>
           </li>

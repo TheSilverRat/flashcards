@@ -117,15 +117,8 @@
   <div class="list">
     <label class="list-item">
       <span class="content">
-        <span class="headline">New cards per day</span>
-        <span class="supporting">Per deck. Lower this if reviews pile up.</span>
-      </span>
-      <input class="input num" type="number" min="0" max="999" inputmode="numeric" bind:value={s.newPerDay} onchange={update} />
-    </label>
-    <label class="list-item">
-      <span class="content">
         <span class="headline">Target recall</span>
-        <span class="supporting">Higher means more frequent reviews</span>
+        <span class="supporting">Only for decks set to spaced repetition. Higher means more frequent reviews.</span>
       </span>
       <select class="input sel" bind:value={s.retention} onchange={update}>
         <option value={0.8}>80%</option>
@@ -145,6 +138,7 @@
       </span>
     </label>
   </div>
+  <p class="hint">Study mode (basic or spaced repetition), card order and daily limits are set per deck: open a deck and tap its options button.</p>
 
   <div class="section-label">Display</div>
   <div class="list">
@@ -223,7 +217,7 @@
   .hint { margin: 12px 16px 0; font-size: 12px; line-height: 16px; color: var(--md-on-surface-variant); }
   .ok { color: var(--ok); display: grid; }
 
-  .num, .sel {
+  .sel {
     width: 88px;
     flex-shrink: 0;
     padding: 10px 12px;

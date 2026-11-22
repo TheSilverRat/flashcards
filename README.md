@@ -1,6 +1,6 @@
 # Flashcards
 
-A simple, offline-first spaced-repetition flashcard app with Markdown, LaTeX (KaTeX) and image support.
+A simple, offline-first flashcard app with Markdown, LaTeX (KaTeX) and image support.
 Built with Svelte 5 + Vite, stores everything on-device in IndexedDB (Dexie), schedules reviews with FSRS (ts-fsrs),
 and installs as a PWA.
 
@@ -71,8 +71,19 @@ Open the Pages URL in Chrome → ⋮ → **Add to Home screen** → **Install**.
 
 - Swipe **up** or tap: flip the card
 - Swipe **left**: skip (review) / next (practice)
-- Swipe **right**: bring back the previous card (undoes its rating)
-- Keyboard: Space = flip, ← / → = previous / next, 1–4 = Again / Hard / Good / Easy, Ctrl+Z = undo, Esc = close
+- Swipe **right**: bring back the previous card (undoes your answer)
+- Keyboard: Space = flip, ← / → = previous / next, Ctrl+Z = undo, Esc = close;
+  Basic: 1 = Missed it, 2 = Got it; Spaced: 1–4 = Again / Hard / Good / Easy
+
+## Study modes (per deck, via the deck's options button)
+
+- **Basic** (default): study all cards whenever you like, no schedule. "Missed it" brings a card back at
+  the end of the session and marks it, so "Go over the missed" later shows only those. Options: card order
+  (shuffled / in order) and cards per session.
+- **Spaced repetition**: FSRS schedules each card days ahead based on your rating (on a brand-new card,
+  Good ≈ 2–3 days, Easy ≈ 8–9 days). Options: new cards per day and reviews per day; target recall is in
+  the app's Settings.
+- **Reset progress** in the same screen starts a deck over.
 
 ## Desktop layout
 

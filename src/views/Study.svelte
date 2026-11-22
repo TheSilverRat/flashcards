@@ -1,15 +1,17 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { db, getSettings, defaultSettings, type Card } from '../lib/db';
+  import { db, deckOptions, getSettings, defaultSettings, type Card } from '../lib/db';
   import {
     buildQueue,
-    dayStart,
+    dayUsage,
     GRADES,
     LEARN_AHEAD,
     previewIntervals,
     rate,
     Rating,
+    recordBasic,
     State,
+    undoBasic,
     undoRating,
     type Grade,
   } from '../lib/srs';
@@ -19,12 +21,21 @@
   import CardContent from '../components/CardContent.svelte';
   import { device } from '../lib/device.svelte';
 
-  let { deckId, mode }: { deckId: string; mode: 'review' | 'practice' } = $props();
+  let { deckId, mode, missed = false }: { deckId: string; mode: 'review' | 'practice'; missed?: boolean } = $props();
+  /** practice = basic mode: go through the cards, answer "Missed it" / "Got it". */
   const practice = $derived(mode === 'practice');
 
   type Hist =
     | { kind: 'skip'; queue: Card[] }
-    | { kind: 'rate'; queue: Card[]; previous: Card; reviewId: string; grade: Grade };
+    | { kind: 'rate'; queue: Card[]; previous: Card; reviewId: string; grade: Grade }
+    | {
+        kind: 'practice';
+        queue: Card[];
+        pIndex: number;
+        missedIds: Set<string>;
+        /** Set when the step saved an answer, so undo can revert it. */
+        rec?: { cardId: string; prevMissed: boolean | undefined; reviewId: string };
+      };
 
   // ---------- Session state ----------
   let settings = $state(defaultSettings);
@@ -35,9 +46,14 @@
   let pIndex = $state(0); // practice mode position
   let reviewed = $state(0);
   let againCount = $state(0);
+  /** Basic mode: cards you missed this session (they come back at the end, and stay marked). */
+  let missedIds = $state.raw(new Set<string>());
+  /** Latest saved "missed" mark per card, so undo restores the right value for repeated cards. */
+  const marks = new Map<string, boolean | undefined>();
+  let uniqueCount = $state(0);
   let revealed = $state(false);
   let shownAt = Date.now();
-  const sessionStart = Date.now();
+  let sessionStart = $state(Date.now());
 
   const current = $derived(practice ? queue[pIndex] : queue[0]);
   const finished = $derived(loaded && !current);
@@ -47,23 +63,27 @@
   );
   const intervals = $derived(!practice && current ? previewIntervals(current, settings.retention) : {});
 
-  onMount(async () => {
+  onMount(load);
+
+  async function load() {
     settings = await getSettings();
-    deckName = (await db.decks.get(deckId))?.name ?? '';
+    const deck = await db.decks.get(deckId);
+    const opts = deckOptions(deck);
+    deckName = deck?.name ?? '';
     const cards = await db.cards.where('deckId').equals(deckId).toArray();
     if (practice) {
-      queue = shuffle(cards);
+      let pool = missed ? cards.filter((c) => c.missed) : cards;
+      pool = opts.order === 'ordered' ? pool.sort((a, b) => a.createdAt - b.createdAt) : shuffle(pool);
+      if (opts.sessionSize) pool = pool.slice(0, opts.sessionSize);
+      for (const c of pool) marks.set(c.id, c.missed);
+      queue = pool;
+      uniqueCount = pool.length;
     } else {
-      const newToday = await db.reviews
-        .where('reviewedAt')
-        .aboveOrEqual(dayStart())
-        .filter((r) => r.deckId === deckId && r.prevState === State.New)
-        .count();
-      queue = buildQueue(cards, settings.newPerDay - newToday);
+      queue = buildQueue(cards, await dayUsage(deckId), opts);
     }
     loaded = true;
     shownAt = Date.now();
-  });
+  }
 
   function shuffle<T>(a: T[]): T[] {
     const b = [...a];
@@ -146,7 +166,11 @@
   // ---------- Actions ----------
   function next() {
     if (!current) return;
-    if (practice) return transition(-1, () => void pIndex++);
+    if (practice)
+      return transition(-1, () => {
+        history = [...history, { kind: 'practice', queue, pIndex, missedIds }];
+        pIndex++;
+      });
     if (queue.length <= 1) return nudge('Last card, rate it to finish');
     transition(-1, () => {
       history = [...history, { kind: 'skip', queue }];
@@ -155,14 +179,20 @@
   }
 
   function prev() {
-    if (practice) {
-      if (pIndex === 0) return nudge('This is the first card');
-      return transition(1, () => void pIndex--);
-    }
     const h = history.at(-1);
-    if (!h) return nudge('No previous card');
+    if (!h) return nudge(practice ? 'This is the first card' : 'No previous card');
     transition(1, async () => {
       history = history.slice(0, -1);
+      if (h.kind === 'practice') {
+        if (h.rec) {
+          await undoBasic(h.rec.cardId, h.rec.prevMissed, h.rec.reviewId);
+          marks.set(h.rec.cardId, h.rec.prevMissed);
+        }
+        queue = h.queue;
+        pIndex = h.pIndex;
+        missedIds = h.missedIds;
+        return;
+      }
       if (h.kind === 'rate') {
         await undoRating(h.previous, h.reviewId);
         reviewed--;
@@ -188,19 +218,32 @@
     });
   }
 
-  function practiceAgain() {
+  /** Basic mode answer. A missed card comes back at the end of the session and stays marked "missed". */
+  function answer(gotIt: boolean) {
     const card = current;
-    if (!card) return;
-    transition(-1, () => {
-      queue = [...queue, card];
+    if (!card || !revealed || busy) return;
+    transition(-1, async () => {
+      const step = { kind: 'practice' as const, queue, pIndex, missedIds };
+      const missedNow = !gotIt || missedIds.has(card.id);
+      const prevMissed = marks.has(card.id) ? marks.get(card.id) : card.missed;
+      const { reviewId } = await recordBasic({ ...card, missed: prevMissed }, missedNow, gotIt, Date.now() - shownAt);
+      marks.set(card.id, missedNow);
+      history = [...history, { ...step, rec: { cardId: card.id, prevMissed, reviewId } }];
+      if (!gotIt) {
+        missedIds = new Set(missedIds).add(card.id);
+        queue = [...queue, card];
+      }
       pIndex++;
     });
   }
 
-  function restartPractice() {
-    queue = shuffle(queue.filter((c, i, a) => a.findIndex((x) => x.id === c.id) === i));
+  async function restartPractice() {
+    sessionStart = Date.now();
+    history = [];
     pIndex = 0;
+    missedIds = new Set();
     revealed = false;
+    await load();
   }
 
   // ---------- Gestures ----------
@@ -296,8 +339,8 @@
       const g = GRADES.find((x) => x.key === e.key);
       if (g) grade(g.grade);
     } else if (revealed && practice) {
-      if (e.key === '1') practiceAgain();
-      else if (e.key === '2') next();
+      if (e.key === '1') answer(false);
+      else if (e.key === '2') answer(true);
     }
   }
 
@@ -318,14 +361,25 @@
     </div>
     <span class="left">{loaded ? remaining : ''}</span>
   </header>
-  <p class="deck-name">{deckName}{practice ? ' · Practice' : ''}</p>
+  <p class="deck-name">{deckName}{practice && missed ? ' · Missed cards' : ''}</p>
 
   {#if !loaded}
     <div class="stage"></div>
   {:else if finished}
     <section class="done">
       <div class="done-icon"><Icon name="check" size={36} /></div>
-      {#if !practice && reviewed === 0 && !history.length}
+      {#if practice && uniqueCount === 0}
+        <h2>{missed ? 'No missed cards' : 'No cards yet'}</h2>
+        <p>{missed ? 'You got every card the last time you saw it.' : 'Add some cards to this deck first.'}</p>
+        <div class="done-actions">
+          {#if missed}
+            <button class="btn primary lg" onclick={() => go(`/deck/${deckId}/practice`, { replace: true })}>
+              <Icon name="play" /> Study all cards
+            </button>
+          {/if}
+          <button class="btn text lg" onclick={() => back(`/deck/${deckId}`)}>Back to deck</button>
+        </div>
+      {:else if !practice && reviewed === 0 && !history.length}
         <h2>Nothing due right now</h2>
         <p>You're all caught up with this deck.</p>
         <div class="done-actions">
@@ -338,7 +392,8 @@
         <h2>Session complete</h2>
         <div class="summary">
           {#if practice}
-            <div><span class="n">{queue.length}</span><span class="l">cards seen</span></div>
+            <div><span class="n">{uniqueCount}</span><span class="l">card{uniqueCount === 1 ? '' : 's'}</span></div>
+            <div><span class="n">{uniqueCount - missedIds.size}</span><span class="l">got first time</span></div>
           {:else}
             <div><span class="n">{reviewed}</span><span class="l">reviews</span></div>
             <div>
@@ -350,8 +405,13 @@
         </div>
         <div class="done-actions">
           <button class="btn primary lg" onclick={() => back(`/deck/${deckId}`)}>Done</button>
+          {#if practice && missedIds.size}
+            <button class="btn lg" onclick={() => go(`/deck/${deckId}/practice/missed`, { replace: true })}>
+              <Icon name="refresh" /> Go over the {missedIds.size} missed
+            </button>
+          {/if}
           {#if practice}
-            <button class="btn lg" onclick={restartPractice}><Icon name="shuffle" /> Shuffle & restart</button>
+            <button class="btn text lg" onclick={restartPractice}><Icon name="shuffle" /> Study again</button>
           {:else if history.length}
             <button class="btn text lg" onclick={prev}><Icon name="undo" /> Undo last</button>
           {/if}
@@ -418,11 +478,12 @@
         <button class="btn primary lg block" onclick={flip}>Show answer</button>
       {:else if practice}
         <div class="group">
-          <button class="grade g1" onclick={practiceAgain}>
-            <span class="gl">See again later</span>
+          <button class="grade g1" onclick={() => answer(false)}>
+            <span class="gl">Missed it</span>
+            <span class="gi">comes back later</span>
             {#if device.desktop}<span class="kbd">1</span>{/if}
           </button>
-          <button class="grade g3" onclick={next}>
+          <button class="grade g3" onclick={() => answer(true)}>
             <span class="gl">Got it</span>
             {#if device.desktop}<span class="kbd">2</span>{/if}
           </button>
