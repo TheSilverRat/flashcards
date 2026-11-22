@@ -6,6 +6,7 @@
   import { choose, toast, ui } from '../lib/ui.svelte';
   import Icon from '../components/Icon.svelte';
   import { device, setLayout, type LayoutPref } from '../lib/device.svelte';
+  import { THEMES, theme, setTheme } from '../lib/theme.svelte';
 
   let s = $state({ ...defaultSettings });
   let last = $state<number | null>(null);
@@ -147,6 +148,28 @@
 
   <div class="section-label">Display</div>
   <div class="list">
+    <div class="list-item static theme-row">
+      <span class="content">
+        <span class="headline">Theme</span>
+        <span class="supporting">{THEMES.find((t) => t.id === theme.id)?.label}</span>
+      </span>
+      <div class="swatches" role="radiogroup" aria-label="Theme">
+        {#each THEMES as t (t.id)}
+          <button
+            class="swatch"
+            class:selected={theme.id === t.id}
+            style:--sw={t.swatch}
+            style:--sw-bg={t.surface}
+            role="radio"
+            aria-checked={theme.id === t.id}
+            aria-label={t.label}
+            title={t.label}
+            onclick={() => setTheme(t.id)}>
+            {#if theme.id === t.id}<Icon name="check" size={20} />{/if}
+          </button>
+        {/each}
+      </div>
+    </div>
     <label class="list-item">
       <span class="content">
         <span class="headline">Layout</span>
@@ -208,6 +231,26 @@
     border-radius: var(--md-shape-xs) var(--md-shape-xs) 0 0;
   }
   .sel.wide { width: 128px; }
+
+  /* Theme swatches: the theme's primary color on its own background, check mark when selected. */
+  .swatches { display: flex; gap: 8px; flex-shrink: 0; }
+  .swatch {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(circle, var(--sw) 0 13px, var(--sw-bg) 14px);
+    box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+    color: var(--sw-bg);
+    transition: border-radius 0.25s var(--md-emphasized), transform 0.15s var(--md-standard);
+  }
+  .swatch:active { transform: scale(0.92); }
+  .swatch.selected {
+    border-radius: 14px;
+    background: var(--sw);
+    box-shadow: 0 0 0 2px var(--md-surface-container), 0 0 0 4px var(--sw);
+  }
 
   :global(html.desktop) .page { max-width: 760px; }
 

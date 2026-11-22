@@ -1,6 +1,7 @@
 import { mount } from 'svelte';
 import { registerSW } from 'virtual:pwa-register';
 import './app.css';
+import './lib/theme.svelte'; // applies the saved color theme before the first render
 import App from './App.svelte';
 
 // Auto-update: when a new version is deployed (e.g. you pushed new cards), the service worker
