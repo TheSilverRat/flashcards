@@ -15,6 +15,8 @@ export const THEMES: { id: ThemeId; label: string; swatch: string; surface: stri
 ];
 
 const KEY = 'theme';
+/** Used until you pick another one. index.html sets it on <html> too, so the first paint matches. */
+export const DEFAULT_THEME: ThemeId = 'purple';
 
 function readTheme(): ThemeId {
   try {
@@ -23,7 +25,7 @@ function readTheme(): ThemeId {
   } catch {
     /* storage blocked: default theme */
   }
-  return 'orange';
+  return DEFAULT_THEME;
 }
 
 export const theme = $state({ id: readTheme() });
@@ -40,7 +42,7 @@ function apply() {
 export function setTheme(id: ThemeId) {
   theme.id = id;
   try {
-    if (id === 'orange') localStorage.removeItem(KEY);
+    if (id === DEFAULT_THEME) localStorage.removeItem(KEY);
     else localStorage.setItem(KEY, id);
   } catch {
     /* not remembered, still applied for this visit */
